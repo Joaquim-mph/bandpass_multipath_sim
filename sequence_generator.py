@@ -327,11 +327,8 @@ def fft_interpolate_complex(original: np.ndarray, n_interp: int) -> np.ndarray:
 
     return out
 
-# -- Requires scipy for cubic spline: pip install scipy --
-
 
 def interpolate_complex_points(point1: complex, point2: complex, n_interp: int) -> np.ndarray:
-
     # Parameter axis
     x = np.array([0.0, 1.0])
     # Fit two separate 1D cubics on the real and imag parts
@@ -340,16 +337,4 @@ def interpolate_complex_points(point1: complex, point2: complex, n_interp: int) 
 
     xi = np.linspace(0, 1, n_interp)
     return cs_real(xi) + 1j * cs_imag(xi)
-
-
-# Example usage:
-if __name__ == "__main__":
-    # test FFT interpolation
-    orig = np.exp(1j * 2 * np.pi * np.linspace(0, 1, 8, endpoint=False))
-    interp = fft_interpolate_complex(orig, n_interp=2)
-    print("FFT-Interpolated length:", len(interp))
-
-    # test point interpolation
-    pts = interpolate_complex_points(1+1j, -1-1j, n_interp=5)
-    print("Spline points:", pts)
 
