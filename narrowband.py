@@ -115,10 +115,10 @@ fig, ax = plt.subplots(figsize=(7, 7))
 bin_width = centers[1] - centers[0]
 
 # plot histograms for real and imag parts
-ax.bar(centers, counts_re, width=bin_width, alpha=0.6,
-       label=r'$\mathrm{Re}\{H\}$ empírica', edgecolor='black', linewidth=0.5)
-ax.bar(centers, counts_im, width=bin_width, alpha=0.6,
-       label=r'$\mathrm{Im}\{H\}$ empírica', edgecolor='black', linewidth=0.5)
+ax.bar(centers, counts_re, width=bin_width, alpha=0.5,
+       label=r'$\mathrm{Re}\{H\}$', edgecolor='black', linewidth=0.5)
+ax.bar(centers, counts_im, width=bin_width, alpha=0.5,
+       label=r'$\mathrm{Im}\{H\}$', edgecolor='black', linewidth=0.5)
 
 # overlay theoretical Gaussian
 ax.plot(centers, pdf_gauss, '--', label='Gaussiana teórica', lw=LINEWIDTH)
