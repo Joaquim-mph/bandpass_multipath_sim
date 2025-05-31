@@ -152,3 +152,33 @@ polish_ax(ax)
 fig.tight_layout()
 fig.savefig(os.path.join(fig_dir, 'H_pdf_phase.pdf'), dpi=300)
 plt.close(fig)
+
+
+
+r = np.abs(H)  # shape = (M,)
+
+# 1b) Choose bin edges for the histogram:
+num_bins = 100
+r_max = r.max()
+bins = np.linspace(0, r_max, num_bins + 1)
+
+# 1c) Empirical PDF of r
+hist_r, edges_r = np.histogram(r, bins=bins, density=True)
+centers_r = 0.5 * (edges_r[:-1] + edges_r[1:])   # bin centers
+
+
+# 1e) Theoretical Rayleigh PDF:
+#     f_R(r) = (r / σ²) * exp(−r²/(2σ²)),   for r ≥ 0.
+pdf_rayleigh = (centers_r / (sigma**2)) * np.exp(-centers_r**2 / (2 * sigma**2))
+
+# 1f) Plot:
+plt.figure(figsize=(6,4))
+plt.bar(centers_r, hist_r, width=centers_r[1] - centers_r[0],
+        alpha=0.5, label="Empirical |H| histogram", edgecolor='k')
+plt.plot(centers_r, pdf_rayleigh, 'r--', lw=2, label="Theoretical Rayleigh PDF")
+plt.xlabel("Envelope $r = |H(t)|$")
+plt.ylabel("Probability density")
+plt.title("Empirical vs. Theoretical Rayleigh Envelope")
+plt.legend()
+plt.tight_layout()
+plt.show()
