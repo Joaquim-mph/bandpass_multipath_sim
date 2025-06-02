@@ -18,7 +18,7 @@ fmax   = v/lambda_
 M      = int(1e5)
 t      = np.linspace(0, 0.25, M)
 
-N      = 100000
+N      = int(1e6)
 an     = np.ones(N) * np.sqrt(1/N)
 thetan = 2*np.pi * np.random.rand(N)
 fDn    = fmax * np.cos(2*np.pi * np.random.rand(N))
@@ -37,8 +37,35 @@ def gen_rayleigh(t, an, thetan, fDn):
         H += an[n] * np.exp(1j * phase)
     return H
 
+@njit(parallel=True, fastmath=True)
+def gen_rayleigh_fast(t, an, thetan, fDn):
+    """
+    Computes H(t) = sum_{n=1}^N a_n * exp(j*(theta_n - 2*pi*fDn[n]*t))
+    but in a more memory-friendly way:
+      - parallel over the M time samples (outer loop)
+      - inner loop is over N and uses cos/sin (no big array allocations)
+    """
+    M = t.size
+    N = an.size
+    H = np.zeros(M, np.complex128)
+    const = 2.0 * np.pi
+
+    # Parallelize over time index m, so each thread writes only to H[m]
+    for m in prange(M):
+        tm = t[m]
+        acc = 0.0 + 0.0j
+        # Sum over all N paths for this fixed time tm
+        for n in range(N):
+            # β_n = 2π * fDn[n]
+            phi = thetan[n] - const * fDn[n] * tm
+            # an[n] * (cos(phi) + j*sin(phi))
+            acc += an[n] * (np.cos(phi) + 1j * np.sin(phi))
+        H[m] = acc
+
+    return H
+
 # First call compiles; subsequent calls are blazing fast
-H = gen_rayleigh(t, an, thetan, fDn)
+H = gen_rayleigh_fast(t, an, thetan, fDn)
 
 
 # —————————————————————————————————————————————
@@ -115,10 +142,17 @@ fig, ax = plt.subplots(figsize=(7, 7))
 bin_width = centers[1] - centers[0]
 
 # plot histograms for real and imag parts
-ax.bar(centers, counts_re, width=bin_width, alpha=0.5,
-       label=r'$\mathrm{Re}\{H\}$', edgecolor='black', linewidth=0.5)
-ax.bar(centers, counts_im, width=bin_width, alpha=0.5,
-       label=r'$\mathrm{Im}\{H\}$', edgecolor='black', linewidth=0.5)
+ax.bar(centers, counts_re, 
+       width=bin_width, 
+       alpha=0.5,
+       label=r'$\mathrm{Re}\{H\}$', 
+       edgecolor='black', linewidth=0.5)
+ax.bar(centers, counts_im, 
+       width=bin_width, 
+       alpha=0.5,
+       label=r'$\mathrm{Im}\{H\}$', 
+       edgecolor='black', 
+       linewidth=0.5)
 
 # overlay theoretical Gaussian
 ax.plot(centers, pdf_gauss, '--', label='Gaussiana teórica', lw=LINEWIDTH)
@@ -137,7 +171,61 @@ fig.savefig(os.path.join(fig_dir, 'H_pdf_real_imag.pdf'), dpi=300)
 plt.close(fig)
 
 # —————————————————————————————————————————————
-# 3) PDF de la fase
+# 3) PDF del sobre (envelope) |H(t)|
+# —————————————————————————————————————————————
+r = np.abs(H)  # envelope de H(t), shape = (M,)
+
+# 4a) Definir bordes de los bins para el histograma
+num_bins = 150
+r_max = r.max()
+bins = np.linspace(0, r_max, num_bins + 1)
+
+# 4b) Histograma empírico normalizado
+hist_r, edges_r = np.histogram(r, bins=bins, density=True)
+centers_r = 0.5 * (edges_r[:-1] + edges_r[1:])   # centros de cada bin
+
+# 4c) PDF Rayleigh teórica: f_R(r) = (r / σ²) exp(−r²/(2σ²)),   r ≥ 0
+pdf_rayleigh = (centers_r / (sigma**2)) * np.exp(-centers_r**2 / (2 * sigma**2))
+
+# 4d) Graficar histograma y PDF teorica
+fig, ax = plt.subplots(figsize=(7, 7))
+
+# Histograma del sobre
+bin_width = centers_r[1] - centers_r[0]
+ax.bar(
+    centers_r,
+    hist_r,
+    width=bin_width,
+    alpha=0.5,
+    #edgecolor='black',
+    linewidth=0.5,
+    label=r'Histograma empírico de $|H|$'
+)
+
+# Curva de la PDF Rayleigh teórica
+ax.plot(
+    centers_r,
+    pdf_rayleigh,
+    'r--',
+    lw=LINEWIDTH,
+    label=r'PDF Rayleigh teórica'
+)
+
+# Etiquetas, título y leyenda
+ax.set_xlabel(r'Sobre $r = |H(t)|$', fontsize=FONTSIZE)
+ax.set_ylabel('Densidad de probabilidad', fontsize=FONTSIZE)
+ax.set_title(r'PDF empírica vs. teórica del sobre Rayleigh', fontsize=FONTSIZE+2)
+ax.legend(frameon=False, fontsize=FONTSIZE)
+
+# Estilo refinado
+polish_ax(ax)
+
+fig.tight_layout()
+fig.savefig(os.path.join(fig_dir, 'H_envelope_pdf_rayleigh.pdf'), dpi=300)
+plt.close(fig)
+
+# —————————————————————————————————————————————
+# 4) PDF de la fase
 # —————————————————————————————————————————————
 set_plot_style("default")
 
@@ -155,30 +243,3 @@ plt.close(fig)
 
 
 
-r = np.abs(H)  # shape = (M,)
-
-# 1b) Choose bin edges for the histogram:
-num_bins = 100
-r_max = r.max()
-bins = np.linspace(0, r_max, num_bins + 1)
-
-# 1c) Empirical PDF of r
-hist_r, edges_r = np.histogram(r, bins=bins, density=True)
-centers_r = 0.5 * (edges_r[:-1] + edges_r[1:])   # bin centers
-
-
-# 1e) Theoretical Rayleigh PDF:
-#     f_R(r) = (r / σ²) * exp(−r²/(2σ²)),   for r ≥ 0.
-pdf_rayleigh = (centers_r / (sigma**2)) * np.exp(-centers_r**2 / (2 * sigma**2))
-
-# 1f) Plot:
-plt.figure(figsize=(6,4))
-plt.bar(centers_r, hist_r, width=centers_r[1] - centers_r[0],
-        alpha=0.5, label="Empirical |H| histogram", edgecolor='k')
-plt.plot(centers_r, pdf_rayleigh, 'r--', lw=2, label="Theoretical Rayleigh PDF")
-plt.xlabel("Envelope $r = |H(t)|$")
-plt.ylabel("Probability density")
-plt.title("Empirical vs. Theoretical Rayleigh Envelope")
-plt.legend()
-plt.tight_layout()
-plt.show()
