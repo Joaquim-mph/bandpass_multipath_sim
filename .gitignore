@@ -6,8 +6,9 @@ __pycache__/
 *.png
 # C extensions
 *.so
-*.ipynb
+
 # Distribution / packaging
+#*.ipynb
 .Python
 build/
 develop-eggs/

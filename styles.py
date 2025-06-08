@@ -261,8 +261,8 @@ STYLE_CONFIGS = {
             "legend.facecolor": "#eeeeee",
             "figure.figsize": (7.5, 4.2),
             "axes.prop_cycle": plt.cycler(color=[
-                "#2e8b57", "#8fbc8f", "#a0522d", "#556b2f",
-                "#6b8e23", "#b8860b", "#228b22", "#483d8b"
+                "#2e8b57", "#a0522d", "#483d8b", "#b8860b",
+                "#8fbc8f", "#556b2f","#6b8e23", "#228b22"
             ]),
         }
     },
