@@ -13,7 +13,7 @@ fmax    = v / lambda_
 M = int(1e5)
 t_host = np.linspace(0, 0.25, M, dtype=np.float64)
 
-N = int(1e6)
+N = int(1e4)
 an_host     = np.ones(N, dtype=np.float64) * np.sqrt(1.0 / N)
 thetan_host = (2 * np.pi * np.random.rand(N)).astype(np.float64)
 fDn_host    = (fmax * np.cos(2 * np.pi * np.random.rand(N))).astype(np.float64)
