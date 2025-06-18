@@ -179,3 +179,11 @@ def symbol_indices_to_bits(
         for b in range(bps-1, -1, -1):
             bits.append((sym >> b) & 1)
     return bits
+
+def bits_to_symbol_indices(bits: np.ndarray, mod_order: int) -> np.ndarray:
+    bps = bits_per_symbol(mod_order)
+    if len(bits) % bps != 0:
+        raise ValueError("Number of bits must be multiple of log2(M)")
+    symbols = bits.reshape(-1, bps)
+    # MSB‐first to integer
+    return np.dot(symbols, 1 << np.arange(bps-1, -1, -1))
