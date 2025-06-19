@@ -3,7 +3,7 @@ import math
 import cmath
 from typing import Sequence, List, Tuple
 
-from utils import QPSK, bits_per_symbol
+from utils import QPSK, QAM16,  bits_per_symbol
 
 
 def equalize_channel(
@@ -54,53 +54,38 @@ def separate_real_imaginary(
     return data.real.copy(), data.imag.copy()
 
 
+
 def QAMdemod(
     I_matrix: List[List[float]],
     Q_matrix: List[List[float]],
     modulation_order: int
 ) -> List[List[int]]:
     """
-    Nearest-neighbor demodulation for square M-QAM.
-
-    Parameters
-    ----------
-    I_matrix, Q_matrix
-        2D lists of I and Q samples (rows of vectors).
-    modulation_order
-        M (perfect square, e.g. 4, 16, 64).
-
-    Returns
-    -------
-    demodulated_rows : List of lists of ints
-        Symbol indices [0..M-1] for each row.
-
-    Raises
-    ------
-    ValueError
-        If modulation_order is not a perfect square.
+    Nearest‐neighbor demodulation for square M‐QAM, using the exact same LUT
+    and normalization as in modulation.
     """
     M = modulation_order
-    m = int(math.sqrt(M))
+    m = int(math.isqrt(M))
     if m*m != M:
         raise ValueError("modulation_order must be a perfect square")
 
-    # Constellation grid levels
-    levels = list(range(-m+1, m, 2))
-    # Average QAM energy = 2*(M-1)/3
+    # exact normalization factor: 2*(M−1)/3
     norm = math.sqrt(2*(M-1)/3)
-    constellation = [complex(x, y)/norm for y in reversed(levels) for x in levels]
+
+    # build constellation in the same index→point order as QAM16:
+    constellation = [QAM16[s] / norm for s in range(M)]
 
     demod_rows: List[List[int]] = []
     for I_row, Q_row in zip(I_matrix, Q_matrix):
         idx_row: List[int] = []
         for i_val, q_val in zip(I_row, Q_row):
             sample = complex(i_val, q_val)
-            # find closest constellation point
+            # nearest‐neighbor in the shared LUT
             idx = min(range(M), key=lambda k: abs(sample - constellation[k]))
             idx_row.append(idx)
         demod_rows.append(idx_row)
-    return demod_rows
 
+    return demod_rows
 
 def qamdemod_interface(
     I: Sequence[float],
@@ -111,7 +96,7 @@ def qamdemod_interface(
     Wrapper for QAMdemod that takes 1D I/Q vectors and flips Q-axis.
     """
     I_mat = [list(I)]
-    Q_mat = [[-q for q in Q]]  # correct for mirrored Gray code
+    Q_mat = [list(Q)]          # pass Q as-is
     rows = QAMdemod(I_mat, Q_mat, modulation_order)
     return rows[0]
 

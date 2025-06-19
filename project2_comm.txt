@@ -1,0 +1,106 @@
+1. Monte-Carlo Setup
+Runs: Perform at least 21 independent trials to average out randomness.
+SNR sweep: For each trial, evaluate SNR₍dB₎ from –2 dB to 30 dB in 1 dB steps.
+Bits per run: Generate 100 000 random data bits (excluding pilots) each time. Proyecto2_EL7041__OtoA_…
+
+2. Transmitter Chain
+Bit→Symbol Mapping
+Compute bits-per-symbol: bps=log⁡2(M)\mathrm{bps}=\log_2(M)bps=log2​(M) for M∈{4,16}M\in\{4,16\}M∈{4,16}.
+Group bits into symbols, map via Gray-coded QPSK or 16-QAM constellations, normalized so Es=1E_s=1Es​=1. Proyecto2_EL7041__OtoA_…
+Pilot Insertion
+Insert a known pilot symbol every PPP data symbols, for P∈{5,10,20}P\in\{5,10,20\}P∈{5,10,20}.
+These pilots will serve as channel‐estimation anchors. Proyecto2_EL7041__OtoA_…
+
+3. Channel Models
+AWGN only
+Add complex Gaussian noise with μ=0,  σ2=N0/2\mu=0,\;\sigma^2=N_0/2μ=0,σ2=N0​/2, where N0=Es/10SNR/10N_0=E_s/10^{\mathrm{SNR}/10}N0​=Es​/10SNR/10. Proyecto2_EL7041__OtoA_…
+Multipath with Doppler (Jakes)
+Two scenarios: 5 paths and 40 paths, unit gain each; mobile speed in {30 km/h, 120 km/h}; carrier at 700 MHz and 3.5 GHz.
+Generate time-varying channel taps H[n]H[n]H[n] by summing PPP phasors with random phases & Doppler shifts. Proyecto2_EL7041__OtoA_…
+Flat Rayleigh fading
+Memoryless per‐symbol complex Gaussian gains with CN(0,1)\mathcal{CN}(0,1)CN(0,1). Proyecto2_EL7041__OtoA_…
+
+4. Receiver Chain
+Channel Estimation
+Perfect CSI: assume full knowledge of HHH.
+FFT interpolation: sample estimated HHH at pilot positions, zero-pad & inverse-FFT to interpolate between pilots.
+Cubic spline: separately spline the real & imag parts of pilot estimates.
+Equalization (Zero-Forcing)
+Divide each received sample by the corresponding estimate H^[n]\hat H[n]H^[n], guard against H^≈0\hat H\approx0H^≈0.
+Demodulation
+QAM: split I/Q, correct sign mirroring on Q-axis, nearest-neighbor search in the normalized constellation.
+PSK: sector-based phase decision.
+Bit decision
+Map each symbol index back into its bps\mathrm{bps}bps bits.
+
+5. Performance Metrics & Plots
+BER vs. Eb/N0E_b/N_0Eb​/N0​:
+Simulated curves for AWGN, each multipath scenario, and each estimator (perfect, FFT, spline).
+Overlay theoretical BER for AWGN‐only and flat-Rayleigh fading.
+Constellation diagrams:
+Tx: clean QPSK/16-QAM.
+Rx (AWGN) at SNR = –5, 0, 10, 30 dB.
+Rx (AWGN + multipath) before & after equalization (pick one scenario). Proyecto2_EL7041__OtoA_…
+
+6. Report & Presentation
+Structure: brief theory, detailed methodology, results with analysis, conclusions, bibliography.
+Code: include well‐documented scripts/functions.
+Slides: ≤ 10 min covering objectives, methods, key results, and insights.
+
+
+
+---------------------------------------------------------------
+
+bandpass-multipath-simulator/
+├── README.md
+├── requirements.txt
+├── setup.py                # if you want to pip-install as a package
+│
+├── src/
+│   └── bandpass_sim/
+│       ├── __init__.py
+│       │
+│       ├── transmitter.py          # bit→symbol mapping, pilot insertion
+│       │   ├── generate_sequence_bins()
+│       │   ├── modulate_sequence()
+│       │   └── add_pilot_symbols()
+│       │
+│       ├── channel.py              # channel models + noise
+│       │   ├── apply_awgn()
+│       │   ├── generate_rayleigh_mpth()
+│       │   └── generate_doppler_mpth()
+│       │
+│       ├── estimator.py            # pilot-based channel estimation
+│       │   ├── remove_pilot_symbols()
+│       │   ├── fft_interpolate_complex()
+│       │   └── interpolate_complex_points()
+│       │
+│       ├── receiver.py             # equalizer + demod
+│       │   ├── equalize_channel()
+│       │   ├── separate_real_imaginary()
+│       │   ├── QAMdemod(), qamdemod_interface()
+│       │   ├── pskdemod()
+│       │   └── demod()
+│       │
+│       ├── utils.py                # shared constants & helpers
+│       │   ├── QPSK, QAM16, PILOT
+│       │   └── ebn0_to_snrdb(), etc.
+│       │
+│       └── metrics.py              # BER counting, theoretical curves
+│           ├── bit_error_rate()
+│           └── theoretical_ber_awgn(), theoretical_ber_rayleigh()
+│
+├── examples/
+│   └── run_simulation.py           # a runnable script, wraps main() below
+│
+├── notebooks/
+│   └── analysis.ipynb              # for interactive plotting & exploration
+│
+├── scripts/
+│   └── plot_results.py             # standalone plotting of saved results
+│
+└── tests/
+    ├── test_transmitter.py
+    ├── test_channel.py
+    ├── test_estimator.py
+    └── test_receiver.py
