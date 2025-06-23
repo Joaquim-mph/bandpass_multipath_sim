@@ -1,10 +1,11 @@
-from transmitter import generate_sequence_bins, modulate_sequence, add_pilot_symbols
+from transmitter import *
 from receiver import *
 from channel import *
 from estimator import *
 from utils import QPSK,QAM16, PILOT
 import math
 import numpy as np
+
 
 # Test routines transmitter.py
 def test_generate_sequence_bins():
@@ -17,6 +18,7 @@ def test_generate_sequence_bins():
             assert seq.min() >= 0 and seq.max() < mod, "Symbol out of range"
     print("  ✓ generate_sequence_bins passed")
 
+
 def test_modulate_sequence():
     print("Testing modulate_sequence...")
     seq = np.array([0, 1, 2, 3])
@@ -24,6 +26,7 @@ def test_modulate_sequence():
     avg_energy = np.mean(np.abs(tx)**2)
     assert np.isclose(avg_energy, 1.0, atol=1e-6), f"Avg energy not 1, got {avg_energy}"
     print(f"  ✓ modulate_sequence passed (avg energy = {avg_energy:.3f})")
+
 
 def test_add_pilot_symbols():
     print("Testing add_pilot_symbols...")
@@ -50,6 +53,7 @@ def test_equalize_channel():
         raise AssertionError("Shape mismatch error not raised")
     print("  ✓ equalize_channel passed")
 
+
 def test_separate_real_imaginary():
     print("Testing separate_real_imaginary...")
     data = np.array([1+2j, -1-0.5j, 0+1j])
@@ -58,31 +62,41 @@ def test_separate_real_imaginary():
     assert np.array_equal(Q, np.array([2, -0.5, 1])), "Q component mismatch"
     print("  ✓ separate_real_imaginary passed")
 
+
 def test_qam_demod_roundtrip():
-    print("Testing QAM demodulation round-trip...")
-    # generate random symbol indices
+    print("Testing QAM demodulation round-trip…")
+    # pick 10 random 16‑QAM symbol indices
     sym = np.random.randint(0, 16, size=10)
-    # map to constellation
-    tx = np.array([QAM16[s]/math.sqrt(10) for s in sym])
-    I, Q = separate_real_imaginary(tx)
-    recovered = qamdemod_interface(I, Q, 16)
-    assert recovered == sym.tolist(), f"QAM demod failed: {recovered} != {sym}"
+    # modulate via the official modulator
+    tx = modulate_sequence(sym, 16)
+    # demodulate via the generic demod API
+    recovered = demod(tx, 16, 'QAM')
+    assert recovered == sym.tolist(), f"QAM demod failed: {recovered} != {sym.tolist()}"
     print("  ✓ QAM round-trip demod passed")
 
 def test_psk_demod_roundtrip():
-    print("Testing PSK demodulation round-trip...")
+    print("Testing PSK demodulation round-trip…")
     sym = np.random.randint(0, 4, size=10)
-    tx = np.array([QPSK[s]/math.sqrt(2) for s in sym])
+    tx = modulate_sequence(sym, 4)
     recovered = demod(tx, 4, 'PSK')
-    assert recovered == sym.tolist(), f"PSK demod failed: {recovered} != {sym}"
+    assert recovered == sym.tolist(), f"PSK demod failed: {recovered} != {sym.tolist()}"
     print("  ✓ PSK round-trip demod passed")
+
+
 
 def test_bit_symbol_conversion():
     print("Testing bit-symbol conversions...")
     bits = np.random.randint(0, 2, size=32)
-    mod = 16
-    syms = bits_to_symbol_indices(bits, mod)
+    mod  = 16
+
+    # round‐trip bits → symbols → bits
+    syms    = bits_to_symbol_indices(bits, mod)
     bits_rt = symbol_indices_to_bits(syms, mod)
+
+    # if symbol_indices_to_bits returns an ndarray, turn it into a list
+    if isinstance(bits_rt, np.ndarray):
+        bits_rt = bits_rt.tolist()
+
     assert bits_rt == bits.tolist(), "Bit-symbol round-trip failed"
     print("  ✓ bit-symbol conversion passed")
 

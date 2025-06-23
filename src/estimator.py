@@ -1,48 +1,6 @@
 import numpy as np
-from typing import Tuple
 from scipy.interpolate import CubicSpline
 
-
-def remove_pilot_symbols(
-    data: np.ndarray,
-    pilot_spacing: int
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Extract payload and pilot symbols from a stream with regularly inserted pilots.
-
-    Pilots are assumed inserted every (pilot_spacing+1)-th sample, starting at index 0.
-
-    Parameters
-    ----------
-    data
-        Received symbol stream including pilots.
-    pilot_spacing
-        Number of data symbols between consecutive pilots.
-
-    Returns
-    -------
-    payload : np.ndarray of complex
-        Data symbols with pilots removed.
-    pilots : np.ndarray of complex
-        Pilot symbols in the order they appeared.
-
-    Raises
-    ------
-    ValueError
-        If pilot_spacing < 1.
-    """
-    if pilot_spacing < 1:
-        raise ValueError("pilot_spacing must be >= 1")
-
-    payload = []
-    pilots = []
-    for idx, sample in enumerate(data):
-        if idx % (pilot_spacing + 1) == 0:
-            pilots.append(sample)
-        else:
-            payload.append(sample)
-
-    return np.array(payload, dtype=complex), np.array(pilots, dtype=complex)
 
 
 def fft_interpolate_complex(

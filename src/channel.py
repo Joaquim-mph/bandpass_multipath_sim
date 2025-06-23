@@ -86,9 +86,10 @@ def generate_rayleigh_mpth(
     H : np.ndarray
         Complex Gaussian samples ~ CN(0,1) (unit average power).
     """
-    real = rng.normal(0.0, 1.0, size=size)
-    imag = rng.normal(0.0, 1.0, size=size)
-    return (real + 1j*imag) * math.sqrt(0.5)
+    sigma = math.sqrt(0.5)
+    real = rng.normal(0.0, sigma, size=size)
+    imag = rng.normal(0.0, sigma, size=size)
+    return real + 1j*imag
 
 
 def generate_doppler_mpth(
@@ -98,47 +99,26 @@ def generate_doppler_mpth(
     carrier_freq: float,
     rng: np.random.Generator
 ) -> np.ndarray:
-    """
-    Generate time-varying multipath fading (Jakes model) with Doppler.
+    if size <= 0 or paths <= 0 or carrier_freq <= 0:
+        raise ValueError("size, paths, and carrier_freq must be > 0")
 
-    Parameters
-    ----------
-    size
-        Number of time samples.
-    paths
-        Number of independent multipath rays.
-    speed_kmh
-        Mobile speed in km/h.
-    carrier_freq
-        Carrier frequency in Hz.
-    rng
-        Numpy random Generator for reproducibility.
+    # Precompute constants
+    wavelength   = C / carrier_freq
+    max_doppler  = (speed_kmh / 3.6) / wavelength
+    t            = np.arange(size) / size          
+    an           = 1.0 / math.sqrt(paths)
 
-    Returns
-    -------
-    H : np.ndarray
-        Complex fading coefficients of length `size`, normalized E[|H|^2]=1.
-    """
-    if size <= 0:
-        raise ValueError("size must be > 0")
-    if paths <= 0:
-        raise ValueError("paths must be > 0")
-    if carrier_freq <= 0:
-        raise ValueError("carrier_freq must be > 0")
-
-    wavelength = C / carrier_freq
-    max_doppler = (speed_kmh / 3.6) / wavelength  # in Hz
-
-    t = np.arange(size) / size
-    an = 1.0 / math.sqrt(paths)
+    # Draw all ray phases & Doppler shifts at once
     thetan = rng.uniform(0.0, 2*PI, size=paths)
-    phi = rng.uniform(0.0, 2*PI, size=paths)
-    fDn = max_doppler * np.cos(2 * PI * phi)
+    phi    = rng.uniform(0.0, 2*PI, size=paths)
+    fDn    = max_doppler * np.cos(2 * PI * phi)
 
-    H = np.zeros(size, dtype=complex)
-    for n in range(paths):
-        phase = thetan[n] - 2 * PI * fDn[n] * t
-        H += an * np.exp(1j * phase)
+    # Build a (paths × size) array of phases:
+    phases = thetan[:,None] - 2 * PI * fDn[:,None] * t[None,:] 
+
+    # Sum across rays and apply amplitude
+    H = an * np.exp(1j * phases).sum(axis=0)  
+
     return H
 
 
@@ -178,19 +158,19 @@ def transmit_through_channel(
         True channel gains applied.
     """
     model = model.lower()
+    
     if model == 'awgn':
         H = np.ones_like(data)
         rx = apply_awgn(data, snr_db, rng, verbose)
-    elif model == 'rayleigh':
-        H = generate_rayleigh_mpth(data.shape[0], rng)
-        rx = apply_channel(data, H)
-        rx = apply_awgn(rx, snr_db, rng, verbose)
-    elif model == 'doppler':
-        if None in (paths, speed_kmh, carrier_freq):
-            raise ValueError("paths, speed_kmh, and carrier_freq must be provided for doppler model")
-        H = generate_doppler_mpth(data.shape[0], paths, speed_kmh, carrier_freq, rng)
-        rx = apply_channel(data, H)
-        rx = apply_awgn(rx, snr_db, rng, verbose)
     else:
-        raise ValueError(f"Unknown channel model '{model}'")
+        if model == 'rayleigh':
+            H = generate_rayleigh_mpth(len(data), rng)
+        elif model == 'doppler':
+            if None in (paths, speed_kmh, carrier_freq):
+                raise ValueError("paths, speed_kmh, and carrier_freq must be provided for doppler model")
+            H = generate_doppler_mpth(len(data), paths, speed_kmh, carrier_freq, rng)
+        else:
+            raise ValueError(f"Unknown channel model '{model}'")
+    rx = apply_channel(data, H)
+    rx = apply_awgn(rx, snr_db, rng, verbose)
     return rx, H

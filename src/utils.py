@@ -10,26 +10,21 @@ C = 3e8  # Speed of light (m/s)
 # Constellation maps (Gray-coded)
 # ----------------------------------------------------------------------------
 # QPSK: 0→1+1j, 1→-1+1j, 2→-1-1j, 3→1-1j
-QPSK: Dict[int, complex] = {
-    0:  1 + 1j,
-    1: -1 + 1j,
-    2: -1 - 1j,
-    3:  1 - 1j,
-}
+# 4‐PSK (QPSK) Gray‐map: 0→1+1j, 1→-1+1j, 2→-1-1j, 3→1-1j
+QPSK = np.array([1+1j, -1+1j, -1-1j, 1-1j], dtype=np.complex128) / math.sqrt(2)
 
-# 16-QAM Gray-coded 4×4 grid {–3, –1, +1, +3}
+# 16-QAM Gray‐map (4×4): levels {–3, –1, +1, +3}
 _level_map = {0: -3, 1: -1, 3: 1, 2: 3}
-QAM16: Dict[int, complex] = {
-    s: (_level_map[(s >> 2) & 0x3] + 1j * _level_map[s & 0x3])
-    for s in range(16)
-}
+QAM16 = np.array(
+    [(_level_map[(s>>2)&3] + 1j*_level_map[s&3]) for s in range(16)],
+    dtype=np.complex128
+) / math.sqrt(10)
+
 
 # Pilot symbol index (common for QPSK and QAM)
 PILOT = 0
 
-# ----------------------------------------------------------------------------
-# Utility functions
-# ----------------------------------------------------------------------------
+
 def bits_per_symbol(mod_complexity: int) -> int:
     """
     Compute number of bits per symbol for an M-ary modulation.

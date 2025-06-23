@@ -1,7 +1,5 @@
 import numpy as np
 import math
-
-
 from utils import QPSK, QAM16, PILOT
 
 
@@ -43,34 +41,20 @@ def generate_sequence_bins(
     return symbols
 
 
-def modulate_sequence(
-    sequence: np.ndarray,
-    mod_complexity: int
-) -> np.ndarray:
+def modulate_sequence(sequence: np.ndarray, mod_complexity: int) -> np.ndarray:
     """
-    Map integer symbols to complex constellation points.
-
-    Parameters
-    ----------
-    sequence
-        Array of integer symbols [0..M-1].
-    mod_complexity
-        Modulation order (4 or 16 supported).
-
-    Returns
-    -------
-    tx_symbols : np.ndarray of complex
-        Complex baseband waveform with unit average symbol energy.
+    Map integer symbols to complex constellation points via array indexing.
+    Works with np.int64 or Python ints interchangeably.
     """
     if mod_complexity == 4:
-        lut, norm = QPSK, math.sqrt(2)
+        lut = QPSK
     elif mod_complexity == 16:
-        lut, norm = QAM16, math.sqrt(10)
+        lut = QAM16
     else:
-        raise ValueError(f"Modulation complexity {mod_complexity} not supported")
+        raise ValueError(f"Unsupported modulation order: {mod_complexity}")
 
-    # lookup + normalize
-    return np.array([lut[s] / norm for s in sequence], dtype=complex)
+    # direct NumPy indexing is safe under multiprocessing
+    return lut[sequence]
 
 
 def add_pilot_symbols(
@@ -78,49 +62,34 @@ def add_pilot_symbols(
     mod_complexity: int,
     pilot_spacing: int
 ) -> np.ndarray:
-    """
-    Insert pilot symbols at regular intervals into a symbol stream.
-
-    Parameters
-    ----------
-    data
-        Transmit symbol array (complex). No pilots.
-    mod_complexity
-        Modulation order for pilot mapping.
-    pilot_spacing
-        Number of data symbols between consecutive pilots.
-
-    Returns
-    -------
-    tx_with_pilots : np.ndarray of complex
-        Symbol array including pilots every (pilot_spacing+1) positions.
-
-    Raises
-    ------
-    ValueError
-        If pilot_spacing < 1.
-    """
     if pilot_spacing < 1:
         raise ValueError("pilot_spacing must be >= 1")
 
-    # select pilot constellation point (normalized)
+    # pick pilot point
     if mod_complexity == 4:
         pilot = QPSK[PILOT] / math.sqrt(2)
     elif mod_complexity == 16:
         pilot = QAM16[PILOT] / math.sqrt(10)
     else:
-        raise ValueError(f"Modulation complexity {mod_complexity} not supported")
+        raise ValueError(f"Unsupported modulation: {mod_complexity}")
 
-    N = len(data)
+    N = data.size
+    step = pilot_spacing + 1
+    # same formula for number of pilots
     n_pilots = math.ceil(N / pilot_spacing) + 1
-    out = []
-    data_idx = 0
+    out_len = N + n_pilots
 
-    for i in range(N + n_pilots):
-        if i % (pilot_spacing + 1) == 0:
-            out.append(pilot)
-        else:
-            out.append(data[data_idx])
-            data_idx += 1
+    # allocate output
+    out = np.empty(out_len, dtype=complex)
 
-    return np.array(out, dtype=complex)
+    # indices where pilots go
+    pilot_idx = np.arange(0, out_len, step)
+    out[pilot_idx] = pilot
+
+    # fill data into the other slots
+    mask = np.ones(out_len, dtype=bool)
+    mask[pilot_idx] = False
+    out[mask] = data  
+
+    return out
+
