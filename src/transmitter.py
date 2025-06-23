@@ -41,21 +41,34 @@ def generate_sequence_bins(
     return symbols
 
 
-def modulate_sequence(sequence: np.ndarray, mod_complexity: int) -> np.ndarray:
+def modulate_sequence(
+    sequence: np.ndarray,
+    mod_complexity: int
+) -> np.ndarray:
     """
-    Map integer symbols to complex constellation points via array indexing.
-    Works with np.int64 or Python ints interchangeably.
+    Map integer symbols to complex constellation points,
+    with a defensive bounds check.
     """
+    # bits-per-symbol sanity
+    if mod_complexity not in (4, 16):
+        raise ValueError(f"Unsupported modulation complexity {mod_complexity}")
+
+    # pick the right LUT and normalization
     if mod_complexity == 4:
-        lut = QPSK
-    elif mod_complexity == 16:
-        lut = QAM16
-    else:
-        raise ValueError(f"Unsupported modulation order: {mod_complexity}")
+        lut, norm = QPSK, math.sqrt(2)
+    else:  # mod_complexity == 16
+        lut, norm = QAM16, math.sqrt(10)
 
-    # direct NumPy indexing is safe under multiprocessing
-    return lut[sequence]
+    # make sure every symbol is in [0 .. M-1]
+    seq = np.asarray(sequence, dtype=int)
+    if seq.min() < 0 or seq.max() >= mod_complexity:
+        raise ValueError(
+            f"Symbol index out of range for M={mod_complexity}: "
+            f"got idxs in [{seq.min()}..{seq.max()}]"
+        )
 
+    # do a safe per‐symbol lookup
+    return np.array([lut[int(s)] / norm for s in seq], dtype=complex)
 
 def add_pilot_symbols(
     data: np.ndarray,

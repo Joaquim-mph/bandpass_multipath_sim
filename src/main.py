@@ -25,8 +25,8 @@ doppler_params = {
 }
 
 # 2) Simulation settings
-n_bits = 2000     # bits per run
-runs   = 2         # number of Monte Carlo runs per scenario
+n_bits = 100_000     # bits per run
+runs   = 21         # number of Monte Carlo runs per scenario
 
 # 3) Container for results
 rows = []
@@ -62,6 +62,10 @@ def process_one(rx, H, bits, M, P, snr_db, model, scenario_tag):
     rec_f = demod(eq_fft,     M, 'QAM' if M>4 else 'PSK')
     rec_c = demod(eq_cubic,   M, 'QAM' if M>4 else 'PSK')
 
+    rec_p = np.array(rec_p, dtype=int)
+    rec_f = np.array(rec_f, dtype=int)
+    rec_c = np.array(rec_c, dtype=int)
+
     bits_p = symbol_indices_to_bits(rec_p, M)
     bits_f = symbol_indices_to_bits(rec_f, M)
     bits_c = symbol_indices_to_bits(rec_c, M)
@@ -88,8 +92,8 @@ def process_one(rx, H, bits, M, P, snr_db, model, scenario_tag):
 # 4) Helper for one Monte Carlo run
 def single_run(seed, M, P, snr_db, model, scenario_tag, ch_args):
     rng_run = np.random.default_rng(seed)
-    bits = rng_run.integers(0, 2, size=n_bits)
-    syms = bits_to_symbol_indices(bits, M)
+    syms = generate_sequence_bins(M, n_bits)
+    bits = symbol_indices_to_bits(syms, M)
     tx   = modulate_sequence(syms, M)
     txp  = add_pilot_symbols(tx, M, P)
     rx, H = transmit_through_channel(txp, model, snr_db, rng_run, **ch_args)
