@@ -80,6 +80,10 @@ rec_p = demod(eq_perfect, modulation_order, 'PSK')
 rec_f = demod(eq_fft,     modulation_order, 'PSK')
 rec_c = demod(eq_cubic,   modulation_order, 'PSK')
 
+rec_p = np.array(rec_p, dtype=int)
+rec_f = np.array(rec_f, dtype=int)
+rec_c = np.array(rec_c, dtype=int)
+
 # 7) Convert symbol indices to bit-streams
 bits_p = symbol_indices_to_bits(rec_p, modulation_order)
 bits_f = symbol_indices_to_bits(rec_f, modulation_order)

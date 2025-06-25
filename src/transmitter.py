@@ -1,7 +1,7 @@
 import numpy as np
 import math
 from utils import QPSK, QAM16, PILOT
-
+from typing import Sequence
 
 def generate_sequence_bins(
     mod_complexity: int,
@@ -41,34 +41,40 @@ def generate_sequence_bins(
     return symbols
 
 
+
 def modulate_sequence(
-    sequence: np.ndarray,
+    sequence: Sequence[int],
     mod_complexity: int
 ) -> np.ndarray:
     """
-    Map integer symbols to complex constellation points,
-    with a defensive bounds check.
+    Map integer symbols to complex constellation points, normalizing
+    so that the *actual* average symbol energy = 1.
     """
-    # bits-per-symbol sanity
-    if mod_complexity not in (4, 16):
+    # Select the right LUT
+    if mod_complexity == 4:
+        lut = QPSK
+    elif mod_complexity == 16:
+        lut = QAM16
+    else:
         raise ValueError(f"Unsupported modulation complexity {mod_complexity}")
 
-    # pick the right LUT and normalization
-    if mod_complexity == 4:
-        lut, norm = QPSK, math.sqrt(2)
-    else:  # mod_complexity == 16
-        lut, norm = QAM16, math.sqrt(10)
-
-    # make sure every symbol is in [0 .. M-1]
     seq = np.asarray(sequence, dtype=int)
     if seq.min() < 0 or seq.max() >= mod_complexity:
-        raise ValueError(
-            f"Symbol index out of range for M={mod_complexity}: "
-            f"got idxs in [{seq.min()}..{seq.max()}]"
-        )
+        raise ValueError(f"Symbol index out of range for M={mod_complexity}: "
+                         f"got idxs in [{seq.min()}..{seq.max()}]")
 
-    # do a safe per‐symbol lookup
+    # Build the raw constellation array
+    const = np.array([lut[s] for s in range(mod_complexity)], dtype=complex)
+
+    # Compute its actual mean symbol energy
+    Es = np.mean(np.abs(const)**2)
+
+    # Normalization factor to make Es == 1
+    norm = math.sqrt(Es)
+
+    # Lookup + normalize
     return np.array([lut[int(s)] / norm for s in seq], dtype=complex)
+
 
 def add_pilot_symbols(
     data: np.ndarray,

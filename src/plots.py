@@ -7,7 +7,7 @@ from utils import QPSK, QAM16
 from transmitter import generate_sequence_bins, modulate_sequence, add_pilot_symbols
 from receiver import remove_pilot_symbols, equalize_channel
 from channel import transmit_through_channel
-
+import os
 
 def _build_constellation_lut(M: int):
     if M == 4:
@@ -18,16 +18,13 @@ def _build_constellation_lut(M: int):
         lut = QAM16
     return np.array([lut[s] / norm for s in range(M)], dtype=complex)
 
+
 def plot_constellations(
     tx: np.ndarray,
     sym_indices: Sequence[int],
     eqs: List[np.ndarray],
     labels: List[str],
 ):
-    """
-    Scatter‐plot the ideal TX constellation and equalized RX constellations,
-    coloring *each point* by its original symbol index so you can track it.
-    """
     # Number of symbols
     M = len(np.unique(sym_indices))
     bps = int(np.log2(M))
@@ -73,7 +70,7 @@ def plot_constellations(
 
 
 
-def compare_snr_constellations(
+def plot_unequalized(
     modulation_order: int,
     model: str,
     snr_list: list = [-5, 0, 10, 30],
@@ -84,125 +81,121 @@ def compare_snr_constellations(
     carrier_freq: float = 700e6,
     rng: np.random.Generator = None
 ):
-    """
-    Compare equalized constellations across multiple SNRs in a 2×2 grid.
-
-    Parameters
-    ----------
-    modulation_order
-        Modulation order (4 for QPSK, 16 for 16-QAM).
-    model
-        Channel model ('awgn', 'rayleigh', or 'doppler').
-    snr_list
-        List of 4 SNR values (dB) to plot in reading order.
-    n_bits
-        Number of bits to generate (symbols = n_bits/log2(M)).
-    pilot_spacing
-        Pilots inserted every (pilot_spacing+1) symbols.
-    paths, speed_kmh, carrier_freq
-        Doppler parameters, if model='doppler'.
-    rng
-        NumPy random Generator (optional).
-    """
-    if rng is None:
-        rng = np.random.default_rng()
-
-    # 1) Generate & modulate one block
-    symbols = generate_sequence_bins(modulation_order, n_bits)
-    tx = modulate_sequence(symbols, modulation_order)
-    txp = add_pilot_symbols(tx, modulation_order, pilot_spacing)
-
-    # Prepare color mapping by original symbol index
-    M = modulation_order
-    cmap = plt.cm.get_cmap('tab10', M)
-    norm = mcolors.BoundaryNorm(np.arange(M+1)-0.5, M)
-
-    # Create 2x2 figure
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-    axes = axes.flatten()
-
-    for ax, snr_db in zip(axes, snr_list):
-        # 2) Transmit through channel + AWGN
-        rx, H = transmit_through_channel(
-            txp, model, snr_db, rng,
-            paths=paths, speed_kmh=speed_kmh, carrier_freq=carrier_freq
-        )
-        # 3) Remove pilots
-        payload_rx, pilots_rx = remove_pilot_symbols(rx, pilot_spacing)
-        payload_H, _ = remove_pilot_symbols(H, pilot_spacing)
-        # 4) Equalize (perfect CSI)
-        eq = equalize_channel(payload_rx, payload_H)
-
-        # 5) Scatter plot, color by original symbol index
-        idx = symbols[:len(eq)]
-        ax.scatter(eq.real, eq.imag, c=idx, cmap=cmap, norm=norm, s=10)
-        ax.set_title(f"SNR = {snr_db} dB")
-        ax.set_xlabel("ℜ(-)")
-        ax.set_ylabel("ℑ(-)")
-        ax.axhline(0, color='grey', lw=0.5)
-        ax.axvline(0, color='grey', lw=0.5)
-
-    fig.suptitle(f"{modulation_order}-ary {model.title()} Channel + AWGN", fontsize=16)
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
-
-
-
-def plot_doppler_swirl(
-    modulation_order: int,
-    model: str,
-    snr_list: list = [-5, 0, 10, 30],
-    n_bits: int = 2000,
-    pilot_spacing: int = 5,
-    paths: int = 5,
-    speed_kmh: float = 30,
-    carrier_freq: float = 700e6,
-    rng: np.random.Generator = None
-):
-    """
-    Plot raw (unequalized) Doppler swirls at different SNRs in a 2×2 grid,
-    coloring each point by its original symbol index.
-    """
     if rng is None:
         rng = np.random.default_rng(42)
 
-    # 1) Generate & modulate symbols
     symbols = generate_sequence_bins(modulation_order, n_bits)
     tx      = modulate_sequence(symbols, modulation_order)
     txp     = add_pilot_symbols(tx, modulation_order, pilot_spacing)
 
-    # Prepare colormap (reuse same palette logic)
     M    = modulation_order
-    cmap = plt.cm.get_cmap('tab20', M)             # or 'tab10' if you prefer
+    cmap = plt.cm.get_cmap('tab20', M)
     norm = mcolors.BoundaryNorm(np.arange(M+1)-0.5, M)
 
-    # 2×2 figure
     fig, axes = plt.subplots(2, 2, figsize=(10, 8))
     axes = axes.flatten()
 
     for ax, snr_db in zip(axes, snr_list):
-        # Transmit through Doppler+AWGN
-        rx, H = transmit_through_channel(
+        rx, _ = transmit_through_channel(
             txp, model, snr_db, rng,
             paths=paths, speed_kmh=speed_kmh, carrier_freq=carrier_freq
         )
-
-        # Remove pilots
         payload_rx, _ = remove_pilot_symbols(rx, pilot_spacing)
-
-        # Color each point by its original symbol index
         idx = symbols[:len(payload_rx)]
-
         ax.scatter(
             payload_rx.real, payload_rx.imag,
             c=idx, cmap=cmap, norm=norm,
             s=10, alpha=0.7
         )
         ax.set_title(f"SNR = {snr_db} dB")
-        ax.set_xlabel("ℜ(-)"); ax.set_ylabel("ℑ(-)")
+        ax.set_xlabel("ℜ{·}"); ax.set_ylabel("ℑ{·}")
         ax.axhline(0, color='gray', lw=0.5); ax.axvline(0, color='gray', lw=0.5)
-        ax.set_aspect('equal')
+        ax.set_aspect('equal', 'box')
 
-    fig.suptitle(f"{modulation_order}-ary {model.title()} Channel Swirls (unequalized)", fontsize=16)
+    fig.suptitle(
+        f"{modulation_order}-ary {model.title()} Swirls (unequalized)",
+        fontsize=16
+    )
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
+
+    # 📁 nombre dinámico que incluye todos los parámetros relevantes
+    out_dir = "constellations"
+    os.makedirs(out_dir, exist_ok=True)
+    if model.lower() == 'doppler':
+        fname = (f"{M}_doppler_p{paths}_v{speed_kmh:.0f}kmh_"
+                 f"f{int(carrier_freq/1e6)}MHz_P{pilot_spacing}_unequalized.png")
+    else:
+        fname = f"{M}_{model}_P{pilot_spacing}_unequalized.png"
+
+    outpath = os.path.join(out_dir, fname)
+    fig.savefig(outpath, dpi = 100)
+    plt.close(fig)
+    print(f"Saved unequalized plot to {outpath}")
+
+
+def plot_equalized(
+    modulation_order: int,
+    model: str,
+    snr_list: list = [-5, 0, 10, 30],
+    n_bits: int = 2000,
+    pilot_spacing: int = 5,
+    paths: int = 5,
+    speed_kmh: float = 30,
+    carrier_freq: float = 700e6,
+    rng: np.random.Generator = None
+):
+    if rng is None:
+        rng = np.random.default_rng(42)
+
+    symbols = generate_sequence_bins(modulation_order, n_bits)
+    tx      = modulate_sequence(symbols, modulation_order)
+    txp     = add_pilot_symbols(tx, modulation_order, pilot_spacing)
+
+    M    = modulation_order
+    cmap = plt.cm.get_cmap('tab20', M)
+    norm = mcolors.BoundaryNorm(np.arange(M+1)-0.5, M)
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    axes = axes.flatten()
+
+    for ax, snr_db in zip(axes, snr_list):
+        rx, H = transmit_through_channel(
+            txp, model, snr_db, rng,
+            paths=paths, speed_kmh=speed_kmh, carrier_freq=carrier_freq
+        )
+        payload_rx, pilots_rx = remove_pilot_symbols(rx, pilot_spacing)
+        payload_H,  _         = remove_pilot_symbols(H,  pilot_spacing)
+        eq = equalize_channel(payload_rx, payload_H)
+
+        idx = symbols[:len(eq)]
+        ax.scatter(
+            eq.real, eq.imag,
+            c=idx, cmap=cmap, norm=norm,
+            s=10, alpha=0.8
+        )
+        ax.set_title(f"SNR = {snr_db} dB")
+        ax.set_xlabel("ℜ{·}"); ax.set_ylabel("ℑ{·}")
+        ax.axhline(0, color='gray', lw=0.5); ax.axvline(0, color='gray', lw=0.5)
+        ax.set_aspect('equal', 'box')
+
+    fig.suptitle(
+        f"{modulation_order}-ary {model.title()} (equalized)",
+        fontsize=16
+    )
+    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # 📁 nombre dinámico con todos los parámetros
+    out_dir = "constellations"
+    os.makedirs(out_dir, exist_ok=True)
+    if model.lower() == 'doppler':
+        fname = (f"{M}_doppler_p{paths}_v{speed_kmh:.0f}kmh_"
+                 f"f{int(carrier_freq/1e6)}MHz_P{pilot_spacing}_equalized.png")
+    else:
+        fname = f"{M}_{model}_P{pilot_spacing}_equalized.png"
+
+    outpath = os.path.join(out_dir, fname)
+    fig.savefig(outpath, dpi = 100)
+    plt.close(fig)
+    print(f"Saved equalized plot to {outpath}")
+
+
