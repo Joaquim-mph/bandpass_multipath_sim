@@ -134,43 +134,23 @@ def transmit_through_channel(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Send data through a specified channel model + AWGN, returning received signal and true H.
-
-    Parameters
-    ----------
-    data
-        Transmit symbol array.
-    model
-        Channel model: 'awgn', 'rayleigh', or 'doppler'.
-    snr_db
-        AWGN SNR in dB.
-    rng
-        Random generator.
-    paths, speed_kmh, carrier_freq
-        Required for 'doppler' model.
-    verbose
-        If True, print debug info.
-
-    Returns
-    -------
-    rx : np.ndarray
-        Received symbols after channel + noise.
-    H  : np.ndarray
-        True channel gains applied.
     """
-    model = model.lower()
-    
-    if model == 'awgn':
+    mode = model.lower()
+
+    if mode == 'awgn':
         H = np.ones_like(data)
         rx = apply_awgn(data, snr_db, rng, verbose)
+    elif mode == 'rayleigh':
+        H = generate_rayleigh_mpth(len(data), rng)
+        rx = apply_channel(data, H)
+        rx = apply_awgn(rx, snr_db, rng, verbose)
+    elif mode == 'doppler':
+        if None in (paths, speed_kmh, carrier_freq):
+            raise ValueError("paths, speed_kmh, and carrier_freq must be provided for doppler model")
+        H = generate_doppler_mpth(len(data), paths, speed_kmh, carrier_freq, rng)
+        rx = apply_channel(data, H)
+        rx = apply_awgn(rx, snr_db, rng, verbose)
     else:
-        if model == 'rayleigh':
-            H = generate_rayleigh_mpth(len(data), rng)
-        elif model == 'doppler':
-            if None in (paths, speed_kmh, carrier_freq):
-                raise ValueError("paths, speed_kmh, and carrier_freq must be provided for doppler model")
-            H = generate_doppler_mpth(len(data), paths, speed_kmh, carrier_freq, rng)
-        else:
-            raise ValueError(f"Unknown channel model '{model}'")
-    rx = apply_channel(data, H)
-    rx = apply_awgn(rx, snr_db, rng, verbose)
+        raise ValueError(f"Unknown channel model '{model}'")
+
     return rx, H

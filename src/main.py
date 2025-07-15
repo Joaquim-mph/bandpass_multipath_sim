@@ -5,10 +5,9 @@ import matplotlib.pyplot as plt
 from itertools import product
 from transmitter import generate_sequence_bins, modulate_sequence, add_pilot_symbols
 from channel     import transmit_through_channel
-from estimator   import fft_interpolate_complex, interpolate_complex_points
+from utils       import fft_interpolate_complex, interpolate_complex_points, bit_error_rate
 from receiver    import equalize_channel, demod, symbol_indices_to_bits, bits_to_symbol_indices, remove_pilot_symbols
-from metrics     import bit_error_rate
-from plots import plot_constellations
+from plots       import plot_constellations
 from concurrent.futures import ProcessPoolExecutor
 from joblib      import Parallel, delayed
 
