@@ -57,46 +57,43 @@ class BchCoder:
         return coeffs
 
     def decode(self, recv_poly: Poly) -> List[int]:
-        # coerce to GF(2)[x]
         recv = recv_poly.set_domain(GF(self.q))
         expr = recv.as_expr()
 
-        # 1) compute syndromes S1..S2t
+        # 1) syndromes S1..S2t
         S = []
         for i in range(1, 2*self.t + 1):
             val = expr.subs(x, alpha**i)
-            s = Poly(val, alpha, domain=GF(self.q)).rem(self.r_poly)
-            S.append(s)
+            S.append(Poly(val, alpha, domain=GF(self.q)).rem(self.r_poly))
 
-        # 2) if no errors
+        # 2) no errors?
         if all(si.is_zero for si in S):
             return self._extract_message(recv)
 
-        # 3) Berlekamp–Massey to find error-locator polynomial coefficients
+        # 3) BM → locator‐polynomial coefficients L[0..v]
         L = self._berlekamp_massey(S)
 
-        # 4) Chien search: find roots of Lambda(z)=0 => error positions
+        # 4) Build locator as expr and Chien‐search
+        Lambda_expr = sum(L[i].as_expr() * x**i for i in range(len(L)))
         errs = []
-        # field order = 2^m - 1 = n
         for j in range(self.n):
-            inv_power = self.n - j  # exponent for alpha^{-j}
-            z = alpha ** inv_power
-            acc = 0
-            for idx, coeff in enumerate(L):
-                acc += coeff * (z ** idx)
-            test = Poly(acc, alpha, domain=GF(self.q)).rem(self.r_poly)
+            val = Lambda_expr.subs(x, alpha**(self.n - j))
+            test = Poly(val, alpha, domain=GF(self.q))\
+                    .rem(self.r_poly)\
+                    .set_domain(GF(self.q))
             if test.is_zero:
                 errs.append(j)
 
-        # 5) flip error bits
+        # 5) flip bits in recv
         bits = [int(c) for c in recv.all_coeffs()]
-        if len(bits) < self.n:
-            bits = [0]*(self.n - len(bits)) + bits
-        for pos in errs:
-            bits[pos] ^= 1
+        bits = [0]*(self.n-len(bits)) + bits
+        for j in errs:
+            idx = (self.n - 1) - j
+            bits[idx] ^= 1
 
-        # 6) extract message bits from highest-order positions
-        return bits[-self.k:]
+        # 6) extract data
+        return bits[:self.k]
+
 
     def _berlekamp_massey(self, S: List[Poly]) -> List[Poly]:
         C = [Poly(1, alpha, domain=GF(self.q))]  # connection polynomial
@@ -142,6 +139,5 @@ class BchCoder:
         if len(coeffs) < self.n:
             coeffs = [0]*(self.n - len(coeffs)) + coeffs
         # return last k bits (highest-order)
-        return coeffs[-self.k:]
-
+        return coeffs[:self.k]
 
