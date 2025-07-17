@@ -80,7 +80,7 @@ if __name__ == "__main__":
     msg_out_dev = cuda.device_array(blocks * k, dtype=np.uint8)
 
     # launch config
-    threads = 256
+    threads = 512
     grid = (blocks + threads - 1) // threads
 
     encode_stream_gpu[grid, threads](msg_dev, cw_dev)

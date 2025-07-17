@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from itertools import product
 from transmitter import generate_sequence_bins, modulate_sequence, add_pilot_symbols
 from channel import transmit_through_channel
-from utils import fft_interpolate_complex, interpolate_complex_points, bit_error_rate
+from utils import fft_interpolate_complex, interpolate_complex_points, bit_error_rate, bits_per_symbol
 from receiver import equalize_channel, demod, symbol_indices_to_bits, bits_to_symbol_indices, remove_pilot_symbols
 from concurrent.futures import ProcessPoolExecutor
 from joblib import Parallel, delayed
@@ -36,9 +36,15 @@ runs   = 21         # number of Monte Carlo runs per scenario
 
 # 3) Container for results
 rows = []
-
+shift_4 = 10*np.log10(4 * R)
+shift_16 = 10*np.log10(16 * R)
 
 def single_run(seed, M, P, snr_db, model, scenario_tag, ch_args, n_bits):
+    if M == 4:
+        snr_db += shift_4
+    else:
+        snr_db += shift_16
+
     rng_run = np.random.default_rng(seed)
     # generate random bit payload
     bits = rng_run.integers(0, 2, size=n_bits).astype(np.uint8)
@@ -47,7 +53,7 @@ def single_run(seed, M, P, snr_db, model, scenario_tag, ch_args, n_bits):
     # BCH encode on GPU
     msg_dev = cuda.to_device(bits)
     cw_dev = cuda.device_array(blocks * n, dtype=np.uint8)
-    threads = 256
+    threads = 512
     grid = (blocks + threads - 1) // threads
     encode_stream_gpu[grid, threads](msg_dev, cw_dev)
     cw_host = cw_dev.copy_to_host()
