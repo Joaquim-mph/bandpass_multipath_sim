@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from itertools import product
 from transmitter import generate_sequence_bins, modulate_sequence, add_pilot_symbols
 from channel     import transmit_through_channel
-from utils       import fft_interpolate_complex, interpolate_complex_points, bit_error_rate
+from utils       import fft_interpolate_complex, interpolate_complex_points, bit_error_rate, bits_per_symbol, ebn0_to_snr_db
 from receiver    import equalize_channel, demod, symbol_indices_to_bits, bits_to_symbol_indices, remove_pilot_symbols
 from concurrent.futures import ProcessPoolExecutor
 from joblib      import Parallel, delayed
@@ -84,7 +84,9 @@ def single_run(seed, M, P, snr_db, model, scenario_tag, ch_args):
     bits = symbol_indices_to_bits(syms, M)
     tx   = modulate_sequence(syms, M)
     txp  = add_pilot_symbols(tx, M, P)
-    rx, H = transmit_through_channel(txp, model, snr_db, rng_run, **ch_args)
+    bps    = bits_per_symbol(M)                   # 2 for QPSK, 4 for 16-QAM
+    esn0_db = ebn0_to_snr_db(snr_db, bps)           # add 10·log10(bps)
+    rx, H = transmit_through_channel(txp, model, esn0_db, rng_run, **ch_args)
     results = process_one(rx, H, bits, M, P, snr_db, model, scenario_tag)
     # extract per-method BER for this run
     return {res['method']: res['ber'] for res in results}

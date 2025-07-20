@@ -41,28 +41,43 @@ def demod(
     idxs = dists.argmin(axis=1)
     return idxs.tolist()
 
+
+@njit
+def gray_to_binary(n: int) -> int:
+    mask = n
+    result = n
+    while mask:
+        mask >>= 1
+        result ^= mask
+    return result
+
 @njit
 def symbol_indices_to_bits(symbols: np.ndarray, bps: int) -> np.ndarray:
     n_sym = symbols.shape[0]
-    bits = np.empty(n_sym * bps, dtype=np.int64)
+    bits  = np.empty(n_sym * bps, dtype=np.int64)
     for i in range(n_sym):
-        sym = symbols[i]
+        # first convert Gray index to binary index
+        g = symbols[i]
+        bidx = gray_to_binary(g)
+        # then unpack bits MSB→LSB
         for b in range(bps):
-            bits[i*bps + b] = (sym >> (bps - 1 - b)) & 1
+            bits[i*bps + b] = (bidx >> (bps - 1 - b)) & 1
     return bits
 
 @njit
 def bits_to_symbol_indices(bits: np.ndarray, bps: int) -> np.ndarray:
     n_bits = bits.shape[0]
-    n_sym = n_bits // bps
-    syms = np.empty(n_sym, dtype=np.int64)
+    n_sym  = n_bits // bps
+    syms   = np.empty(n_sym, np.int64)
+
     for i in range(n_sym):
+        # pack
         val = 0
         for b in range(bps):
             val = (val << 1) | bits[i*bps + b]
-        syms[i] = val
+        # binary → Gray
+        syms[i] = val ^ (val >> 1)
     return syms
-
 
 def remove_pilot_symbols(
     data: np.ndarray,

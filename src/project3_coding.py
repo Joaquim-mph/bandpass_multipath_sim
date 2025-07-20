@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from itertools import product
 from transmitter import generate_sequence_bins, modulate_sequence, add_pilot_symbols
 from channel import transmit_through_channel
-from utils import fft_interpolate_complex, interpolate_complex_points, bit_error_rate, bits_per_symbol
+from utils import fft_interpolate_complex, interpolate_complex_points, ebn0_to_snr_db, bit_error_rate, bits_per_symbol
 from receiver import equalize_channel, demod, symbol_indices_to_bits, bits_to_symbol_indices, remove_pilot_symbols
 from concurrent.futures import ProcessPoolExecutor
 from joblib import Parallel, delayed
@@ -65,7 +65,8 @@ def single_run(seed, M, P, snr_db, model, scenario_tag, ch_args, n_bits):
     txp = add_pilot_symbols(tx, M, P)
 
     # transmit through channel
-    rx, H = transmit_through_channel(txp, model, snr_db, rng_run, **ch_args)
+    esn0_db = ebn0_to_snr_db(snr_db, bps) 
+    rx, H = transmit_through_channel(txp, model, esn0_db, rng_run, **ch_args)
 
     # remove pilots and equalize
     payload_rx, pilots_rx = remove_pilot_symbols(rx, P)
